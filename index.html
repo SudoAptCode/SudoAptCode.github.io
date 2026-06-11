@@ -94,20 +94,23 @@
   }
   .hero-left.show { opacity: 1; transform: translateX(0); }
 
-  /* Right: terminal — starts absolutely centered, then transitions to flex position */
+  /* Right: terminal — stays absolute, only transform/left/top animate (no position flip) */
   .hero-right {
     position: absolute;
     left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
     width: min(580px, 90%);
-    transition: all 1s cubic-bezier(0.76,0,0.24,1);
+    transform: translate(-50%, -50%);
+    transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1),
+                left 1.1s cubic-bezier(0.16, 1, 0.3, 1),
+                top 1.1s cubic-bezier(0.16, 1, 0.3, 1),
+                width 1.1s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 3;
   }
   .hero-right.moved {
-    position: relative;
-    left: unset; top: unset;
-    transform: none;
-    flex: 1; width: 100%;
+    left: calc(50% + 1.5rem);
+    top: 50%;
+    width: min(580px, 45%);
+    transform: translate(0, -50%);
   }
 
   /* Terminal window */
