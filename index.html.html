@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sachi — Cybersecurity & CSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0f1e; --bg2: #0f1628; --card: #131d30; --border: #1e2f4a;
+    --cyan: #00d4ff; --cyan-dim: rgba(0,212,255,0.12); --cyan-glow: rgba(0,212,255,0.35);
+    --green: #00ff9d; --white: #e8eaf0; --muted: #7a8ba3;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--white); font-family: var(--font-body); overflow-x: hidden; cursor: none; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
+
+  /* ── MATRIX CANVAS ── */
+  #matrix-canvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none; opacity: 0.07;
+  }
+
+  /* ── CURSOR ── */
+  #cur-dot {
+    position: fixed; width: 10px; height: 10px;
+    background: var(--cyan); border-radius: 50%;
+    pointer-events: none; z-index: 9999;
+    transform: translate(-50%,-50%);
+    box-shadow: 0 0 8px var(--cyan), 0 0 20px var(--cyan-glow);
+    transition: width 0.15s, height 0.15s, background 0.15s;
+  }
+  #cur-cross {
+    position: fixed; pointer-events: none; z-index: 9998;
+    transform: translate(-50%,-50%);
+  }
+  #cur-cross::before, #cur-cross::after {
+    content: ''; position: absolute; background: rgba(0,212,255,0.5);
+  }
+  #cur-cross::before { width: 20px; height: 1px; top: 0; left: -10px; }
+  #cur-cross::after  { width: 1px; height: 20px; top: -10px; left: 0; }
+  #cur-trail-canvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 9997;
+  }
+  body.hovering #cur-dot { width: 20px; height: 20px; background: var(--green); }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1.25rem 2.5rem;
+    background: rgba(10,15,30,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo { font-family: var(--font-mono); font-size: 0.85rem; color: var(--cyan); letter-spacing: 0.05em; }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a {
+    font-size: 0.8rem; font-weight: 500; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); text-decoration: none; transition: color 0.2s;
+  }
+  .nav-links a:hover, .nav-links a.active { color: var(--cyan); }
+
+  /* ── SECTIONS ── */
+  section {
+    position: relative; z-index: 1;
+    min-height: 100vh; display: flex; align-items: center;
+    padding: 6rem 2.5rem 4rem; max-width: 1100px; margin: 0 auto;
+  }
+  section.full { max-width: none; padding-left: 0; padding-right: 0; }
+
+  /* ── HERO ── */
+  #hero {
+    flex-direction: column; justify-content: center;
+    max-width: 100%; padding: 0 2.5rem; overflow: hidden;
+  }
+  .hero-inner {
+    position: relative; z-index: 2; max-width: 1100px; margin: 0 auto; width: 100%;
+    display: flex; align-items: center; gap: 3rem; min-height: 80vh;
+  }
+
+  /* Left: intro — hidden until terminal moves */
+  .hero-left {
+    flex: 1; min-width: 0;
+    opacity: 0; transform: translateX(-32px);
+    transition: opacity 0.9s cubic-bezier(0.16,1,0.3,1), transform 0.9s cubic-bezier(0.16,1,0.3,1);
+  }
+  .hero-left.show { opacity: 1; transform: translateX(0); }
+
+  /* Right: terminal — starts absolutely centered, then transitions to flex position */
+  .hero-right {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(580px, 90%);
+    transition: all 1s cubic-bezier(0.76,0,0.24,1);
+    z-index: 3;
+  }
+  .hero-right.moved {
+    position: relative;
+    left: unset; top: unset;
+    transform: none;
+    flex: 1; width: 100%;
+  }
+
+  /* Terminal window */
+  .terminal-window {
+    background: rgba(13,20,38,0.92);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,212,255,0.08);
+    backdrop-filter: blur(8px);
+  }
+  .terminal-bar {
+    background: #0d1426;
+    padding: 0.65rem 1rem;
+    display: flex; align-items: center; gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .t-btn { width: 12px; height: 12px; border-radius: 50%; }
+  .t-btn.red { background: #ff5f57; }
+  .t-btn.yellow { background: #ffbd2e; }
+  .t-btn.green { background: #28c840; }
+  .t-title { font-family: var(--font-mono); font-size: 0.65rem; color: var(--muted); margin-left: auto; margin-right: auto; letter-spacing: 0.05em; }
+  .terminal-body { padding: 1.25rem 1.5rem; font-family: var(--font-mono); font-size: 0.8rem; line-height: 2; }
+  .t-line { display: flex; gap: 0.5rem; opacity: 0; }
+  .t-line.show { opacity: 1; }
+  .t-prompt { color: var(--green); }
+  .t-cmd { color: var(--white); }
+  .t-out { color: var(--cyan); padding-left: 1rem; }
+  .t-out.muted { color: var(--muted); }
+  .t-cursor-blink {
+    display: inline-block; width: 8px; height: 1em;
+    background: var(--cyan); vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .hero-name {
+    font-family: var(--font-display);
+    font-size: clamp(3.5rem, 9vw, 7.5rem);
+    font-weight: 700; line-height: 0.95;
+    letter-spacing: -0.03em; margin-bottom: 1.5rem;
+  }
+  .hero-name .glitch { display: inline-block; position: relative; color: var(--white); }
+  .hero-name .glitch::after {
+    content: attr(data-text); position: absolute; left: 3px; top: 0;
+    color: var(--cyan); clip-path: polygon(0 30%,100% 30%,100% 50%,0 50%);
+    animation: glitch 6s infinite; opacity: 0.7;
+  }
+  @keyframes glitch {
+    0%,90%,100%{transform:translateX(0);opacity:0}
+    92%{transform:translateX(-4px);opacity:0.7}
+    94%{transform:translateX(4px);opacity:0.7}
+    96%{transform:translateX(0);opacity:0}
+  }
+  .hero-sub {
+    font-size: clamp(1rem,2vw,1.2rem); font-weight: 300;
+    color: var(--muted); max-width: 480px; line-height: 1.6; margin-bottom: 2.5rem;
+  }
+  .hero-sub span { color: var(--white); font-weight: 400; }
+  .hero-cta { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.75rem 1.75rem; font-family: var(--font-display);
+    font-size: 0.85rem; font-weight: 500; letter-spacing: 0.05em;
+    text-decoration: none; border-radius: 4px; transition: all 0.2s; cursor: none;
+  }
+  .btn-primary { background: var(--cyan); color: var(--bg); border: 1px solid var(--cyan); }
+  .btn-primary:hover { background: transparent; color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow); }
+  .btn-ghost { background: transparent; color: var(--white); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  .scroll-hint {
+    position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+    font-family: var(--font-mono); font-size: 0.65rem;
+    color: var(--muted); letter-spacing: 0.1em;
+    animation: float 2s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100%{transform:translateX(-50%) translateY(0)}
+    50%{transform:translateX(-50%) translateY(6px)}
+  }
+
+  /* ── SECTION COMMON ── */
+  .section-label {
+    font-family: var(--font-mono); font-size: 0.7rem; color: var(--cyan);
+    letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .section-label::before { content:''; display:block; width:1.5rem; height:1px; background:var(--cyan); }
+  .section-title {
+    font-family: var(--font-display); font-size: clamp(2rem,5vw,3.5rem);
+    font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1rem; line-height: 1.1;
+  }
+  .section-body { color: var(--muted); font-size: 1rem; line-height: 1.75; max-width: 560px; }
+  .section-body strong { color: var(--white); font-weight: 500; }
+
+  /* ── ABOUT ── */
+  #about { gap: 5rem; }
+  .about-left, .about-right { flex: 1; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2rem; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.25rem; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  }
+  .stat-card:hover { border-color: var(--cyan); transform: translateY(-2px); box-shadow: 0 4px 20px var(--cyan-dim); }
+  .stat-num { font-family: var(--font-display); font-size: 2rem; font-weight: 700; color: var(--cyan); line-height: 1; margin-bottom: 0.3rem; }
+  .stat-label { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.05em; }
+
+  /* ── SKILLS ── */
+  #skills { flex-direction: column; }
+  .skills-header { margin-bottom: 3.5rem; }
+  .skills-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 1.25rem; width: 100%; }
+  .skill-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.75rem; transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+    position: relative; overflow: hidden;
+  }
+  .skill-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--cyan), transparent); opacity:0; transition:opacity 0.25s;
+  }
+  .skill-card:hover { border-color: var(--cyan); box-shadow: 0 8px 32px rgba(0,212,255,0.08); transform: translateY(-3px); }
+  .skill-card:hover::before { opacity:1; }
+  .skill-icon { font-size: 1.5rem; margin-bottom: 1rem; display: block; }
+  .skill-name { font-family: var(--font-display); font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; }
+  .skill-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+  .skill-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem; }
+  .tag {
+    font-family: var(--font-mono); font-size: 0.65rem; color: var(--cyan);
+    background: var(--cyan-dim); border: 1px solid rgba(0,212,255,0.2);
+    padding: 0.2rem 0.55rem; border-radius: 3px; letter-spacing: 0.05em;
+  }
+
+  /* ── PROJECTS ── */
+  #projects { flex-direction: column; }
+  .projects-header { margin-bottom: 3.5rem; }
+  .projects-list { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; }
+  .project-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 2rem; display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 2rem; transition: border-color 0.2s, transform 0.2s;
+  }
+  .project-card:hover { border-color: var(--cyan); transform: translateX(4px); }
+  .project-info { flex: 1; }
+  .project-num { font-family: var(--font-mono); font-size: 0.7rem; color: var(--cyan); letter-spacing: 0.15em; margin-bottom: 0.75rem; opacity: 0.7; }
+  .project-name { font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .project-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.65; max-width: 480px; }
+  .project-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem; }
+  .project-link {
+    color: var(--muted); text-decoration: none; font-size: 0.8rem;
+    display: flex; align-items: center; gap: 0.4rem; transition: color 0.2s; white-space: nowrap; margin-top: 0.25rem;
+  }
+  .project-link:hover { color: var(--cyan); }
+
+  /* ── CONTACT ── */
+  #contact { flex-direction: column; align-items: flex-start; }
+  .contact-inner { max-width: 600px; }
+  .contact-email {
+    font-family: var(--font-display); font-size: clamp(1.5rem,4vw,2.5rem); font-weight: 700;
+    color: var(--cyan); text-decoration: none; display: inline-block;
+    margin: 1.5rem 0 2rem; border-bottom: 2px solid transparent; transition: border-color 0.2s;
+  }
+  .contact-email:hover { border-color: var(--cyan); }
+  .social-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .social-btn {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.2rem;
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--white); text-decoration: none; font-size: 0.82rem; font-weight: 500;
+    transition: all 0.2s;
+  }
+  .social-btn:hover { border-color: var(--cyan); color: var(--cyan); transform: translateY(-2px); }
+
+  /* ── FOOTER ── */
+  footer {
+    position: relative; z-index: 1; text-align: center; padding: 2rem;
+    border-top: 1px solid var(--border); font-family: var(--font-mono);
+    font-size: 0.7rem; color: var(--muted); letter-spacing: 0.05em;
+  }
+
+  /* ── SCROLL REVEAL ── */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.65s ease, transform 0.65s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+  .reveal-delay-4 { transition-delay: 0.4s; }
+
+  /* ── EASTER EGG OVERLAY ── */
+  #egg-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9000;
+    background: rgba(0,0,0,0.92); align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+  #egg-overlay.show { display: flex; }
+  .egg-terminal {
+    background: #0a0f1e; border: 1px solid var(--green); border-radius: 10px;
+    width: min(600px, 90vw); padding: 2rem;
+    font-family: var(--font-mono); font-size: 0.85rem; line-height: 2;
+    box-shadow: 0 0 60px rgba(0,255,157,0.2);
+  }
+  .egg-terminal .eg-line { color: var(--green); }
+  .egg-terminal .eg-out  { color: var(--white); padding-left: 1rem; }
+  .egg-terminal .eg-err  { color: #ff6b6b; padding-left: 1rem; }
+  .egg-close {
+    margin-top: 1.5rem; font-family: var(--font-mono); font-size: 0.75rem;
+    color: var(--muted); text-align: center; letter-spacing: 0.1em;
+  }
+  .egg-close span { color: var(--cyan); cursor: none; }
+
+  /* ── SUDO KONAMI BAR ── */
+  #sudo-bar {
+    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--green);
+    border-radius: 6px; padding: 0.4rem 1rem;
+    font-family: var(--font-mono); font-size: 0.75rem; color: var(--green);
+    z-index: 8000; letter-spacing: 0.1em;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  #sudo-bar.show { opacity: 1; }
+
+  @media (max-width: 768px) {
+    nav { padding: 1rem 1.25rem; }
+    .nav-links { gap: 1.25rem; }
+    section { padding: 5rem 1.25rem 3rem; }
+    #about { flex-direction: column; gap: 2.5rem; }
+    #cur-dot, #cur-cross, #cur-trail-canvas { display: none; }
+    body { cursor: auto; }
+    .hero-inner { flex-direction: column; min-height: unset; gap: 2rem; padding-top: 2rem; }
+    .hero-right { position: relative; left: unset; top: unset; transform: none; width: 100%; }
+    .hero-right.moved { position: relative; }
+    .hero-left { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Matrix rain -->
+<canvas id="matrix-canvas"></canvas>
+<!-- Cursor trail -->
+<canvas id="cur-trail-canvas"></canvas>
+<!-- Cursor -->
+<div id="cur-dot"></div>
+<div id="cur-cross"></div>
+<!-- Sudo bar hint -->
+<div id="sudo-bar">sudo detected... 👀</div>
+<!-- Easter egg overlay -->
+<div id="egg-overlay">
+  <div class="egg-terminal" id="egg-terminal"></div>
+  <div class="egg-close">press <span id="egg-close-btn">ESC</span> or click to close</div>
+</div>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">sachi.dev</div>
+  <ul class="nav-links">
+    <li><a href="#about">About</a></li>
+    <li><a href="#skills">Skills</a></li>
+    <li><a href="#projects">Projects</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section id="hero" class="full" style="min-height:100vh;padding:0 2.5rem;display:flex;align-items:center;">
+  <div class="hero-inner">
+
+    <!-- LEFT: intro (hidden until terminal moves) -->
+    <div class="hero-left" id="hero-left">
+      <h1 class="hero-name" id="hero-name">
+        <span class="glitch" data-text="Hey, I'm">Hey, I'm</span><br>Sachi.
+      </h1>
+      <p class="hero-sub" id="hero-sub">
+        I map attack surfaces for fun and write Java at 2am.<br>
+        <span>CSE student</span> · <span>Cybersecurity</span> · SOA University
+      </p>
+      <div class="hero-cta" id="hero-cta">
+        <a href="#projects" class="btn btn-primary">View Projects →</a>
+        <a href="#contact" class="btn btn-ghost">Get In Touch</a>
+      </div>
+    </div>
+
+    <!-- RIGHT: terminal (starts centered, moves right) -->
+    <div class="hero-right" id="hero-right">
+      <div class="terminal-window">
+        <div class="terminal-bar">
+          <div class="t-btn red"></div>
+          <div class="t-btn yellow"></div>
+          <div class="t-btn green"></div>
+          <div class="t-title">sachi@kali:~</div>
+        </div>
+        <div class="terminal-body" id="term-body">
+          <div class="t-line" id="tl-0"><span class="t-prompt">┌──(sachi㉿kali)-[~]<br>└─$&nbsp;</span><span class="t-cmd" id="tc-0"></span><span class="t-cursor-blink" id="tcur-0"></span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="scroll-hint">
+    SCROLL
+    <svg width="16" height="24" viewBox="0 0 16 24" fill="none">
+      <rect x="0.5" y="0.5" width="15" height="23" rx="7.5" stroke="currentColor"/>
+      <rect x="7" y="4" width="2" height="5" rx="1" fill="currentColor">
+        <animate attributeName="y" values="4;12;4" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;0;1" dur="2s" repeatCount="indefinite"/>
+      </rect>
+    </svg>
+  </div>
+</section>
+
+<!-- About -->
+<section id="about">
+  <div class="about-left reveal">
+    <div class="section-label">Who I Am</div>
+    <h2 class="section-title">Curious by<br>nature.</h2>
+  </div>
+  <div class="about-right">
+    <p class="section-body reveal reveal-delay-1">
+      I'm a first-year CSE student at <strong>ITER, SOA University, Bhubaneswar</strong>,
+      specializing in cybersecurity. I spend my time on platforms like
+      <strong>TryHackMe</strong>, learning how systems break and how to protect them.
+    </p>
+    <p class="section-body reveal reveal-delay-2" style="margin-top:1rem;">
+      When I'm not hacking, I'm writing <strong>Java</strong> for DSA assignments or
+      exploring <strong>discrete math</strong> with Python. My home lab runs on a Kali
+      attacker machine and a Linux Mint victim box.
+    </p>
+    <div class="stat-grid">
+      <div class="stat-card reveal reveal-delay-2"><div class="stat-num">1st</div><div class="stat-label">Year CSE Student</div></div>
+      <div class="stat-card reveal reveal-delay-3"><div class="stat-num">∞</div><div class="stat-label">Things to Learn</div></div>
+      <div class="stat-card reveal reveal-delay-3"><div class="stat-num">2</div><div class="stat-label">Lab Machines Setup</div></div>
+      <div class="stat-card reveal reveal-delay-4"><div class="stat-num">CTF</div><div class="stat-label">Currently Training</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Skills -->
+<section id="skills">
+  <div class="skills-header reveal">
+    <div class="section-label">Toolbox</div>
+    <h2 class="section-title">What I work with.</h2>
+  </div>
+  <div class="skills-grid">
+    <div class="skill-card reveal reveal-delay-1">
+      <span class="skill-icon">🔐</span>
+      <div class="skill-name">Offensive Security</div>
+      <div class="skill-desc">Learning penetration testing fundamentals via TryHackMe. Working toward eJPT certification.</div>
+      <div class="skill-tags"><span class="tag">TryHackMe</span><span class="tag">Kali Linux</span><span class="tag">Nmap</span></div>
+    </div>
+    <div class="skill-card reveal reveal-delay-2">
+      <span class="skill-icon">⚙️</span>
+      <div class="skill-name">Programming</div>
+      <div class="skill-desc">Java for data structures and algorithms. Python for scripting, math, and automation.</div>
+      <div class="skill-tags"><span class="tag">Java</span><span class="tag">Python</span><span class="tag">DSA</span></div>
+    </div>
+    <div class="skill-card reveal reveal-delay-3">
+      <span class="skill-icon">🐧</span>
+      <div class="skill-name">Linux</div>
+      <div class="skill-desc">Daily-driving Linux Mint as a lab machine. Comfortable in the terminal, scripting in Bash.</div>
+      <div class="skill-tags"><span class="tag">Linux Mint</span><span class="tag">Bash</span><span class="tag">CLI</span></div>
+    </div>
+    <div class="skill-card reveal reveal-delay-1">
+      <span class="skill-icon">🔬</span>
+      <div class="skill-name">Lab Setup</div>
+      <div class="skill-desc">Home lab with Metasploitable 2, DVWA, and isolated networks for safe exploitation practice.</div>
+      <div class="skill-tags"><span class="tag">Metasploitable</span><span class="tag">DVWA</span><span class="tag">VMs</span></div>
+    </div>
+    <div class="skill-card reveal reveal-delay-2">
+      <span class="skill-icon">🗂️</span>
+      <div class="skill-name">Version Control</div>
+      <div class="skill-desc">Using Git and GitHub to manage projects, document learning, and build a public portfolio.</div>
+      <div class="skill-tags"><span class="tag">Git</span><span class="tag">GitHub</span></div>
+    </div>
+    <div class="skill-card reveal reveal-delay-3">
+      <span class="skill-icon">🧮</span>
+      <div class="skill-name">Foundations</div>
+      <div class="skill-desc">Discrete math, Boolean logic, number systems, and set theory — the bedrock of CS.</div>
+      <div class="skill-tags"><span class="tag">Discrete Math</span><span class="tag">Logic</span><span class="tag">Algorithms</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Projects -->
+<section id="projects">
+  <div class="projects-header reveal">
+    <div class="section-label">Work</div>
+    <h2 class="section-title">Things I've built.</h2>
+  </div>
+  <div class="projects-list">
+    <div class="project-card reveal reveal-delay-1">
+      <div class="project-info">
+        <div class="project-num">01</div>
+        <div class="project-name">Linked List Library (Java)</div>
+        <div class="project-desc">A full-featured singly linked list implementation with CRUD operations, sort, and reverse. Written from scratch as part of DSA coursework.</div>
+        <div class="project-tags"><span class="tag">Java</span><span class="tag">DSA</span><span class="tag">Data Structures</span></div>
+      </div>
+      <a href="https://github.com/SudoAptCode" class="project-link" target="_blank">GitHub ↗</a>
+    </div>
+    <div class="project-card reveal reveal-delay-2">
+      <div class="project-info">
+        <div class="project-num">02</div>
+        <div class="project-name">Home Pentest Lab</div>
+        <div class="project-desc">Isolated lab environment with Kali (attacker) and Linux Mint (victim) machines running Metasploitable 2 and DVWA for safe exploitation practice.</div>
+        <div class="project-tags"><span class="tag">Kali</span><span class="tag">Metasploitable</span><span class="tag">Networking</span></div>
+      </div>
+    </div>
+    <div class="project-card reveal reveal-delay-3">
+      <div class="project-info">
+        <div class="project-num">03</div>
+        <div class="project-name">CTF Writeups (Coming Soon)</div>
+        <div class="project-desc">Documenting solutions to Capture The Flag challenges from TryHackMe and HackTheBox as I progress through the Jr Penetration Tester path.</div>
+        <div class="project-tags"><span class="tag">CTF</span><span class="tag">TryHackMe</span><span class="tag">Write-ups</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Contact -->
+<section id="contact">
+  <div class="contact-inner">
+    <div class="section-label reveal">Contact</div>
+    <h2 class="section-title reveal">Let's connect.</h2>
+    <p class="section-body reveal reveal-delay-1">I'm always open to internship opportunities, collaborations, or just talking about cybersecurity.</p>
+    <a href="mailto:dev.sachidananda@gmail.com" class="contact-email reveal reveal-delay-2">dev.sachidananda@gmail.com</a>
+    <div class="social-row reveal reveal-delay-3">
+      <a href="https://github.com/SudoAptCode" class="social-btn" target="_blank">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        SudoAptCode
+      </a>
+      <a href="https://www.linkedin.com/in/sachidananda-sahoo-9ab2233a9" class="social-btn" target="_blank">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        LinkedIn
+      </a>
+      <a href="https://tryhackme.com" class="social-btn" target="_blank">🎯 TryHackMe</a>
+    </div>
+  </div>
+</section>
+
+<footer>Built by Sachi · sachi.dev · 2025 · <span style="color:var(--cyan)">try typing "sudo"</span></footer>
+
+<script>
+// ═══════════════════════════════════════
+// MATRIX RAIN
+// ═══════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('matrix-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, cols, drops;
+  const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEF0123456789<>{}[]|/\\';
+
+  function init() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    cols  = Math.floor(W / 18);
+    drops = Array.from({length: cols}, () => Math.random() * -50);
+  }
+  init();
+  window.addEventListener('resize', init);
+
+  function drawMatrix() {
+    ctx.fillStyle = 'rgba(10,15,30,0.05)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = '13px Space Mono, monospace';
+    for (let i = 0; i < cols; i++) {
+      const ch = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(ch, i * 18, drops[i] * 18);
+      if (drops[i] * 18 > H && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  setInterval(drawMatrix, 55);
+})();
+
+// ═══════════════════════════════════════
+// CURSOR + TRAIL
+// ═══════════════════════════════════════
+(function() {
+  const dot   = document.getElementById('cur-dot');
+  const cross = document.getElementById('cur-cross');
+  const tc    = document.getElementById('cur-trail-canvas');
+  const tctx  = tc.getContext('2d');
+  tc.width  = window.innerWidth;
+  tc.height = window.innerHeight;
+  window.addEventListener('resize', () => { tc.width = window.innerWidth; tc.height = window.innerHeight; });
+
+  let mx = -100, my = -100;
+  const trail = [];
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    dot.style.left   = mx + 'px';
+    dot.style.top    = my + 'px';
+    cross.style.left = mx + 'px';
+    cross.style.top  = my + 'px';
+    trail.push({x: mx, y: my, t: Date.now()});
+    if (trail.length > 40) trail.shift();
+  });
+
+  document.querySelectorAll('a, button, .skill-card, .project-card, .stat-card').forEach(el => {
+    el.addEventListener('mouseenter', () => document.body.classList.add('hovering'));
+    el.addEventListener('mouseleave', () => document.body.classList.remove('hovering'));
+  });
+
+  function drawTrail() {
+    tctx.clearRect(0, 0, tc.width, tc.height);
+    const now = Date.now();
+    for (let i = 1; i < trail.length; i++) {
+      const age  = now - trail[i].t;
+      const alpha = Math.max(0, 1 - age / 500);
+      tctx.beginPath();
+      tctx.moveTo(trail[i-1].x, trail[i-1].y);
+      tctx.lineTo(trail[i].x, trail[i].y);
+      tctx.strokeStyle = `rgba(0,212,255,${alpha * 0.35})`;
+      tctx.lineWidth   = (i / trail.length) * 3;
+      tctx.stroke();
+    }
+    requestAnimationFrame(drawTrail);
+  }
+  drawTrail();
+})();
+
+// ═══════════════════════════════════════
+// TERMINAL HERO TYPEWRITER
+// ═══════════════════════════════════════
+(function() {
+  const steps = [
+    { cmd: 'echo "Hello, World!"', delay: 500, outputs: [
+      { text: 'Hello, World!', cls: 't-out' }
+    ]},
+    { cmd: 'whoami', delay: 500, outputs: [
+      { text: 'sachi — cse student | cybersecurity enthusiast', cls: 't-out' }
+    ]},
+    { cmd: 'cat interests.txt', delay: 400, outputs: [
+      { text: '> penetration testing', cls: 't-out' },
+      { text: '> CTF competitions',    cls: 't-out' },
+      { text: '> building cool stuff', cls: 't-out' },
+    ]},
+    { cmd: 'nmap -sV localhost', delay: 300, outputs: [
+      { text: 'PORT     STATE  SERVICE', cls: 't-out muted' },
+      { text: '22/tcp   open   ssh',     cls: 't-out' },
+      { text: '80/tcp   open   http',    cls: 't-out' },
+      { text: '443/tcp  open   https',   cls: 't-out' },
+    ]},
+  ];
+
+  const body = document.getElementById('term-body');
+
+  function typeLine(el, text, cb) {
+    let i = 0;
+    const cursor = el.querySelector('.t-cursor-blink');
+    const cmdEl  = el.querySelector('.t-cmd');
+    function tick() {
+      if (i < text.length) {
+        cmdEl.textContent += text[i++];
+        setTimeout(tick, 45 + Math.random() * 40);
+      } else {
+        if (cursor) cursor.remove();
+        cb && cb();
+      }
+    }
+    tick();
+  }
+
+  function addOutputLine(text, cls) {
+    const d = document.createElement('div');
+    d.className = 't-line show';
+    d.innerHTML = `<span class="${cls}">${text}</span>`;
+    body.appendChild(d);
+  }
+
+  function addPromptLine() {
+    const d = document.createElement('div');
+    d.className = 't-line show';
+    d.innerHTML = `<span class="t-prompt">┌──(sachi㉿kali)-[~]<br>└─$&nbsp;</span><span class="t-cmd"></span><span class="t-cursor-blink"></span>`;
+    body.appendChild(d);
+    return d;
+  }
+
+  function runStep(idx) {
+    if (idx >= steps.length) {
+      // All done — slide terminal right, reveal left intro
+      setTimeout(() => {
+        const right = document.getElementById('hero-right');
+        const left  = document.getElementById('hero-left');
+        right.classList.add('moved');
+        setTimeout(() => left.classList.add('show'), 400);
+      }, 400);
+      return;
+    }
+    const step = steps[idx];
+    let lineEl = idx === 0
+      ? document.getElementById('tl-0')
+      : addPromptLine();
+    lineEl.classList.add('show');
+
+    setTimeout(() => {
+      typeLine(lineEl, step.cmd, () => {
+        step.outputs.forEach((o, i) => {
+          setTimeout(() => addOutputLine(o.text, o.cls), i * 120);
+        });
+        setTimeout(() => runStep(idx + 1), step.delay + step.outputs.length * 120 + 300);
+      });
+    }, idx === 0 ? 800 : 200);
+  }
+
+  runStep(0);
+})();
+
+// ═══════════════════════════════════════
+// SCROLL REVEAL
+// ═══════════════════════════════════════
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }});
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ═══════════════════════════════════════
+// NAV ACTIVE
+// ═══════════════════════════════════════
+const sections  = document.querySelectorAll('section[id]');
+const navLinks  = document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 200) current = s.id; });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+
+// ═══════════════════════════════════════
+// EASTER EGG — type "sudo" anywhere
+// ═══════════════════════════════════════
+(function() {
+  const secret = 'sudo';
+  let buf = '';
+  const bar = document.getElementById('sudo-bar');
+  const overlay = document.getElementById('egg-overlay');
+  const termEl  = document.getElementById('egg-terminal');
+  const closeBtn = document.getElementById('egg-close-btn');
+
+  const eggLines = [
+    { cls: 'eg-line', text: '┌──(root㉿kali)-[~]' },
+    { cls: 'eg-line', text: '└─# sudo su sachi' },
+    { cls: 'eg-out',  text: '[sudo] password for sachi: ••••••••' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-out',  text: '✓ Access granted. Welcome, root.' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-out',  text: 'uid=0(root) gid=0(root) groups=0(root)' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-line', text: '# cat /etc/sachi/secrets.txt' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-out',  text: '  You found the easter egg! 🥚' },
+    { cls: 'eg-out',  text: '  Respect for the curiosity.' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-out',  text: '  "The quieter you become,' },
+    { cls: 'eg-out',  text: '   the more you are able to hear."' },
+    { cls: 'eg-out',  text: '                — Kali Linux motto' },
+    { cls: 'eg-out',  text: '' },
+    { cls: 'eg-err',  text: 'rm -rf /ego  [done]' },
+  ];
+
+  document.addEventListener('keydown', e => {
+    if (overlay.classList.contains('show')) return;
+    buf = (buf + e.key).slice(-secret.length);
+    if (buf === secret) {
+      bar.classList.add('show');
+      setTimeout(() => bar.classList.remove('show'), 1500);
+      setTimeout(showEgg, 800);
+      buf = '';
+    }
+  });
+
+  function showEgg() {
+    termEl.innerHTML = '';
+    overlay.classList.add('show');
+    eggLines.forEach((l, i) => {
+      setTimeout(() => {
+        const d = document.createElement('div');
+        d.className = l.cls;
+        d.textContent = l.text;
+        termEl.appendChild(d);
+      }, i * 80);
+    });
+  }
+
+  function closeEgg() { overlay.classList.remove('show'); }
+  overlay.addEventListener('click', closeEgg);
+  closeBtn.addEventListener('click', closeEgg);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEgg(); });
+})();
+</script>
+</body>
+</html>
